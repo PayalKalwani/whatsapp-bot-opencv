@@ -41,12 +41,14 @@ async function startBot() {
     browser: ["Ubuntu", "Chrome", "22.04.4"]
   });
 
+  // ✅ Updated QR Handler for Render
   sock.ev.on("connection.update", (update) => {
     const { connection, qr, lastDisconnect } = update;
 
     if (qr) {
-      console.log("📱 Scan the QR code below to link WhatsApp:");
-      qrcode.generate(qr, { small: true });
+      const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
+      console.log("📱 WhatsApp QR Code (click or open this link in browser to scan):");
+      console.log(`🔗 ${qrLink}`);
     }
 
     if (connection === "open") {
@@ -85,6 +87,7 @@ async function startBot() {
         }
       }
 
+      // Product catalog
       if (["catalog", "list", "menu"].includes(text)) {
         const catalogText = products.map(p =>
           `🛍️ *${p.name}*\n🔢 SKU: ${p.sku}\n📐 Size: ${p.dimensions}\n💰 Price: ₹${p.price}`
@@ -107,7 +110,7 @@ async function startBot() {
         await sock.sendMessage(jid, { text: reply });
       } else {
         await sock.sendMessage(jid, {
-          text: "❌ Product not recognized. Please call +91-9876543210 for assistance."
+          text: "❌ Product not recognized. Please call +91-9558584466 for assistance."
         });
       }
 
