@@ -1,0 +1,16 @@
+[
+  {
+    "sku": "SKU_1",
+    "name": "Nailcutter Set",
+    "dimensions": "5x2x1 cm",
+    "price": 77,
+    "image": "products/SKU_1.jpg"
+  },
+  {
+    "sku": "SKU_2",
+    "name": "Scissor",
+    "dimensions": "12x3x2 cm",
+    "price": 120,
+    "image": "products/SKU_2.jpg"
+  }
+]

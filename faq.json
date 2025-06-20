@@ -1,0 +1,34 @@
+[
+  {
+    "keywords": ["hi", "hello", "hey", "hii", "heyy", "hi there", "good morning", "good evening"],
+    "reply": "👋 Hello! Welcome to our store.\nYou can type *catalog* to see all products, or send a product image/SKU for details."
+  },
+  {
+    "keywords": ["price", "cost", "rate", "sku_"],
+    "reply": "📦 Please send the product image or type the SKU (e.g., SKU_1), and I’ll instantly give you its price and details."
+  },
+  {
+    "keywords": ["order", "buy", "purchase"],
+    "reply": "🛒 To place an order:\n1️⃣ Send the product image or SKU\n2️⃣ We’ll reply with product details\n3️⃣ You confirm, and we’ll send you the payment and delivery options"
+  },
+  {
+    "keywords": ["delivery", "time", "ship"],
+    "reply": "🚚 Delivery typically takes *40 days*. We share status once dispatched."
+  },
+  {
+    "keywords": ["mumbai", "location", "city"],
+    "reply": "📍 Yes, we deliver across India including Mumbai, Delhi, Surat, Ahmedabad, Pune, and more."
+  },
+  {
+    "keywords": ["product", "catalog", "list", "menu"],
+    "reply": "📋 Type *catalog* to view our full product list with pricing and dimensions."
+  },
+  {
+    "keywords": ["amazon", "seller", "services", "account", "listing", "manage", "management"],
+    "reply": "🛠️ We also provide *Amazon Seller Account Management Services*:\n\n• 📦 Product Listing & SEO\n• 🎯 PPC Campaign Setup & Management\n• 🧾 A+ Content Creation\n• 🛒 FBA / FBM Setup\n• 📊 Sales & Performance Analytics\n• 🛡️ Account Health Support\n\nReply with *call* or *talk to expert* to know more or get a callback."
+  },
+  {
+    "keywords": ["call", "talk", "speak", "contact", "support", "phone", "number", "help", "expert"],
+    "reply": "📞 You can speak with our expert at *+91-9558584466*\n📲 [Click to Call](tel:+919558584466)\nOr reply with your *name and phone*, and we’ll call you back."
+  }
+]

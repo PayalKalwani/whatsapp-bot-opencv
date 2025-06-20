@@ -1,0 +1,7 @@
+node_modules/
+auth/
+*.log
+temp_*.jpg
+products/*.jpg
+.env
+.DS_Store
