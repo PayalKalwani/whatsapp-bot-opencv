@@ -1,15 +1,13 @@
 {
   "name": "whatsapp-bot-opencv",
   "version": "1.0.0",
+  "description": "WhatsApp bot using Baileys, OpenCV, and keyword-based responses",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node bot.js"
   },
-  "keywords": [],
-  "author": "",
+  "author": "Payal Kalwani",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
     "fs-extra": "^11.3.0",
