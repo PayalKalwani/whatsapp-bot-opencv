@@ -1,25 +1,25 @@
 const {
   default: makeWASocket,
   useMultiFileAuthState,
-  downloadMediaMessage
+  downloadMediaMessage,
+  DisconnectReason
 } = require("@whiskeysockets/baileys");
-
 const fs = require("fs-extra");
-const path = require("path");
-const { execSync } = require("child_process");
 const qrcode = require("qrcode-terminal");
+const { execSync } = require("child_process");
+const path = require("path");
 
 const products = require("./products.json");
 const faq = require("./faq.json");
 
-const compareWithProducts = async (receivedImagePath) => {
+async function compareWithProducts(imagePath) {
   let bestScore = 0;
   let bestProduct = null;
 
   for (const product of products) {
     try {
       const score = parseFloat(execSync(
-        `python compare_images.py "${receivedImagePath}" "${product.image}"`
+        `python compare_images.py "${imagePath}" "${product.image}"`
       ).toString().trim());
 
       if (score > bestScore) {
@@ -27,14 +27,14 @@ const compareWithProducts = async (receivedImagePath) => {
         bestProduct = product;
       }
     } catch (err) {
-      console.error("Image comparison error:", err.message);
+      console.error("Image comparison failed:", err.message);
     }
   }
 
   return bestScore > 0.2 ? bestProduct : null;
-};
+}
 
-const startBot = async () => {
+async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth");
   const sock = makeWASocket({
     auth: state,
@@ -42,20 +42,26 @@ const startBot = async () => {
   });
 
   sock.ev.on("connection.update", (update) => {
-    const { qr, connection, lastDisconnect } = update;
+    const { connection, qr, lastDisconnect } = update;
 
     if (qr) {
-      console.log("📱 Scan this QR Code with WhatsApp:");
+      console.log("📱 Scan the QR code below to link WhatsApp:");
       qrcode.generate(qr, { small: true });
     }
 
     if (connection === "open") {
-      console.log("✅ Bot is now connected to WhatsApp!");
+      console.log("✅ WhatsApp connected!");
     }
 
     if (connection === "close") {
-      console.log("❌ Disconnected. Trying to reconnect...");
-      startBot();
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log("❌ Disconnected. Reconnecting...", { shouldReconnect });
+
+      if (shouldReconnect) {
+        startBot();
+      } else {
+        console.log("🛑 Session ended. Please restart manually.");
+      }
     }
   });
 
@@ -63,13 +69,15 @@ const startBot = async () => {
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0];
+    if (!msg.message) return;
+
     const jid = msg.key.remoteJid;
 
-    // 💬 Text Messages
-    if (msg.message?.conversation) {
+    // Handle text messages
+    if (msg.message.conversation) {
       const text = msg.message.conversation.toLowerCase().trim();
 
-      // 📚 FAQ Matching
+      // FAQ and greeting matching
       for (const entry of faq) {
         if (entry.keywords.some(k => text.includes(k))) {
           await sock.sendMessage(jid, { text: entry.reply });
@@ -77,41 +85,35 @@ const startBot = async () => {
         }
       }
 
-      // 📋 Product Catalog
       if (["catalog", "list", "menu"].includes(text)) {
         const catalogText = products.map(p =>
           `🛍️ *${p.name}*\n🔢 SKU: ${p.sku}\n📐 Size: ${p.dimensions}\n💰 Price: ₹${p.price}`
         ).join("\n\n");
-
         await sock.sendMessage(jid, { text: `📦 *Product Catalog:*\n\n${catalogText}` });
         return;
       }
     }
 
-    // 📷 Image Matching
-    if (!msg.message?.imageMessage) return;
+    // Handle image messages
+    if (msg.message.imageMessage) {
+      const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: console });
+      const tempPath = `temp_${Date.now()}.jpg`;
+      await fs.outputFile(tempPath, buffer);
 
-    const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: console });
-    const tempPath = `temp_${Date.now()}.jpg`;
-    await fs.outputFile(tempPath, buffer);
+      const match = await compareWithProducts(tempPath);
 
-    const match = await compareWithProducts(tempPath);
+      if (match) {
+        const reply = `✅ *Match Found!*\n🛍️ *Product*: ${match.name}\n🔢 *SKU*: ${match.sku}\n📐 *Size*: ${match.dimensions}\n💰 *Price*: ₹${match.price}`;
+        await sock.sendMessage(jid, { text: reply });
+      } else {
+        await sock.sendMessage(jid, {
+          text: "❌ Product not recognized. Please call +91-9876543210 for assistance."
+        });
+      }
 
-    if (match) {
-      const reply = `✅ *Match Found!*
-🛍️ *Product*: ${match.name}
-🔢 *SKU*: ${match.sku}
-📐 *Size*: ${match.dimensions}
-💰 *Price*: ₹${match.price}`;
-      await sock.sendMessage(jid, { text: reply });
-    } else {
-      await sock.sendMessage(jid, {
-        text: "❌ Product not recognized.\n📞 Please call us at +91-9876543210 for assistance."
-      });
+      await fs.remove(tempPath);
     }
-
-    await fs.remove(tempPath);
   });
-};
+}
 
 startBot();
