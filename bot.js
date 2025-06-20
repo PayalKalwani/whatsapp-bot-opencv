@@ -1,122 +1,83 @@
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  downloadMediaMessage,
-  DisconnectReason
-} = require("@whiskeysockets/baileys");
-const fs = require("fs-extra");
-const qrcode = require("qrcode-terminal");
-const { execSync } = require("child_process");
-const path = require("path");
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
+const path = require('path');
+const mime = require('mime-types');
+const { ImageMatcher } = require('./image-matcher');
+const express = require('express');
 
-const products = require("./products.json");
-const faq = require("./faq.json");
-
-async function compareWithProducts(imagePath) {
-  let bestScore = 0;
-  let bestProduct = null;
-
-  for (const product of products) {
-    try {
-      const score = parseFloat(execSync(
-        `python compare_images.py "${imagePath}" "${product.image}"`
-      ).toString().trim());
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestProduct = product;
-      }
-    } catch (err) {
-      console.error("Image comparison failed:", err.message);
-    }
-  }
-
-  return bestScore > 0.2 ? bestProduct : null;
-}
-
+// Initialize Baileys
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth");
+  const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+
   const sock = makeWASocket({
     auth: state,
-    browser: ["Ubuntu", "Chrome", "22.04.4"]
+    printQRInTerminal: true,
   });
 
-  // ✅ Updated QR Handler for Render
-  sock.ev.on("connection.update", (update) => {
-    const { connection, qr, lastDisconnect } = update;
-
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
     if (qr) {
-      const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`;
-      console.log("📱 WhatsApp QR Code (click or open this link in browser to scan):");
-      console.log(`🔗 ${qrLink}`);
+      qrcode.generate(qr, { small: true });
     }
-
-    if (connection === "open") {
-      console.log("✅ WhatsApp connected!");
-    }
-
-    if (connection === "close") {
+    if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log("❌ Disconnected. Reconnecting...", { shouldReconnect });
-
+      console.log('connection closed due to', lastDisconnect.error, ', reconnecting:', shouldReconnect);
       if (shouldReconnect) {
         startBot();
-      } else {
-        console.log("🛑 Session ended. Please restart manually.");
       }
+    } else if (connection === 'open') {
+      console.log('✅ WhatsApp connected!');
     }
   });
 
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on("messages.upsert", async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg.message) return;
+    if (!msg.message || msg.key.fromMe) return;
 
-    const jid = msg.key.remoteJid;
+    const sender = msg.key.remoteJid;
+    const messageType = Object.keys(msg.message)[0];
 
-    // Handle text messages
-    if (msg.message.conversation) {
-      const text = msg.message.conversation.toLowerCase().trim();
+    if (messageType === 'imageMessage') {
+      const buffer = await sock.downloadMediaMessage(msg);
+      const matcher = new ImageMatcher('./product-database');
+      const match = matcher.findBestMatch(buffer);
 
-      // FAQ and greeting matching
-      for (const entry of faq) {
-        if (entry.keywords.some(k => text.includes(k))) {
-          await sock.sendMessage(jid, { text: entry.reply });
-          return;
-        }
-      }
-
-      // Product catalog
-      if (["catalog", "list", "menu"].includes(text)) {
-        const catalogText = products.map(p =>
-          `🛍️ *${p.name}*\n🔢 SKU: ${p.sku}\n📐 Size: ${p.dimensions}\n💰 Price: ₹${p.price}`
-        ).join("\n\n");
-        await sock.sendMessage(jid, { text: `📦 *Product Catalog:*\n\n${catalogText}` });
-        return;
-      }
-    }
-
-    // Handle image messages
-    if (msg.message.imageMessage) {
-      const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: console });
-      const tempPath = `temp_${Date.now()}.jpg`;
-      await fs.outputFile(tempPath, buffer);
-
-      const match = await compareWithProducts(tempPath);
-
-      if (match) {
-        const reply = `✅ *Match Found!*\n🛍️ *Product*: ${match.name}\n🔢 *SKU*: ${match.sku}\n📐 *Size*: ${match.dimensions}\n💰 *Price*: ₹${match.price}`;
-        await sock.sendMessage(jid, { text: reply });
-      } else {
-        await sock.sendMessage(jid, {
-          text: "❌ Product not recognized. Please call +91-9558584466 for assistance."
+      if (match && match.confidence > 0.6) {
+        const productInfo = match.product;
+        await sock.sendMessage(sender, {
+          text: `🔍 Match found:\n\n🛍️ *Name:* ${productInfo.name}\n🆔 *SKU:* ${productInfo.sku}\n📏 *Dimensions:* ${productInfo.dimensions}\n💲 *Price:* ${productInfo.price}`,
         });
+      } else {
+        await sock.sendMessage(sender, { text: '❌ No matching product found.' });
       }
-
-      await fs.remove(tempPath);
+    } else if (messageType === 'conversation') {
+      const text = msg.message.conversation.toLowerCase();
+      if (text.includes('hello') || text.includes('hi')) {
+        await sock.sendMessage(sender, { text: '👋 Hello! Send me a product image and I’ll match it for you.' });
+      } else if (text.includes('support')) {
+        await sock.sendMessage(sender, { text: '📞 For support, call us at: tel:+91xxxxxxxxxx' });
+      } else if (text.includes('catalog')) {
+        await sock.sendMessage(sender, { text: '📘 Our product catalog is available at: https://your-website.com/catalog.pdf' });
+      } else {
+        await sock.sendMessage(sender, { text: '🤖 I can help match product images or answer basic queries. Try sending a photo!' });
+      }
     }
   });
 }
 
 startBot();
+
+// --- ✅ Add Express health check server for Render ---
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (_, res) => {
+  res.send('✅ WhatsApp bot is running');
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Health check server running at http://localhost:${PORT}`);
+});
